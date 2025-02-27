@@ -1,3 +1,9 @@
+# main.py
+from train_grpo import execute_grpo_training
+from train_sft import execute_sft_training
+from inference import load_trained_model, run_inference_test
+from config import OUTPUT_DIR_GRPO
+
 def main_pipeline() -> None:
     """
     Main function to run the entire training and inference pipeline.
