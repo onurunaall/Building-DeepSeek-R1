@@ -1,3 +1,4 @@
+# data_prep.py
 from datasets import load_dataset
 from typing import Any, Dict
 from config import CONVERSATION_SYSTEM_PROMPT
@@ -21,8 +22,10 @@ def load_and_prepare_math_dataset() -> Dict[str, Any]:
     """
     raw_dataset = load_dataset("AI-MO/NuminaMath-TIR", "default", split=['train', 'test'])
     dataset_splits: Dict[str, Any] = {"train": raw_dataset[0], "test": raw_dataset[1]}
+    
     for split in dataset_splits:
         dataset_splits[split] = dataset_splits[split].map(format_conversation)
+        # Remove any extra 'messages' column if it exists
         if "messages" in dataset_splits[split].column_names:
             dataset_splits[split] = dataset_splits[split].remove_columns("messages")
     return dataset_splits
