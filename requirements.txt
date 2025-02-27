@@ -1,0 +1,9 @@
+torch==1.13.1
+transformers==4.28.1
+datasets==2.10.1
+trl==0.4.3
+latex2sympy2_extended==0.1.0
+math_verify==0.1.0
+numpy==1.23.5
+PyYAML==6.0
+tqdm==4.64.1
