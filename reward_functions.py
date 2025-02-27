@@ -98,7 +98,7 @@ def get_repetition_penalty_reward_function(ngram_size: int = 3, max_penalty: flo
     
     def generate_ngrams(text: str, n: int) -> List[tuple]:
         words = text.lower().split()
-        # Ensure total ngrams is at least 1 to avoid division by zero.
+        # Ensure there are enough words to form an n-gram to avoid division by zero.
         if len(words) < n:
             return []
         return list(zip(*[words[i:] for i in range(n)]))
