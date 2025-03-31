@@ -3,21 +3,21 @@
 This project is an experimental implementation of a reinforcement learning (RL) and fine-tuning (SFT) pipeline for training a language model. It’s built on a small base model and is designed to encourage better reasoning and more structured responses. The code is intentionally kept simple and unpolished as it’s mainly a research and learning experiment.
 
 ## Installation
-
 Clone this repository and install the required packages:
-
 ```bash
 git clone https://github.com/yourusername/your-repo.git
 cd your-repo
 pip install -r requirements.txt
-
---- Usage --- 
+```
+### Usage
 Run the complete training and inference pipeline with:
+```bash 
 python main.py
-
+```
 This command will execute the reinforcement learning training loop, run the fine-tuning stage test the trained model with a sample input.
 
---- File Structure ---
+### File Structure
+```bash
 project/
 ├── main.py                # Runs the entire pipeline (training and inference)
 ├── settings.py            # Configuration settings for the project
