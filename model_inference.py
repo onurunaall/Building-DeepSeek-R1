@@ -1,7 +1,7 @@
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from typing import Tuple
-from settings import RL_OUTPUT_DIR  # Can change to FT_OUTPUT_DIR if needed
+from settings import RL_OUTPUT_DIR, FT_OUTPUT_DIR
 
 def load_saved_model(model_path: str) -> Tuple[AutoModelForCausalLM, AutoTokenizer, torch.device]:
     """
