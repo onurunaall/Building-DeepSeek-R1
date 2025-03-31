@@ -1,24 +1,30 @@
-# main.py
-from train_grpo import execute_grpo_training
-from train_sft import execute_sft_training
-from inference import load_trained_model, run_inference_test
-from config import OUTPUT_DIR_GRPO
+from reinforcement_training import run_rl_training
+from fine_tuning import run_ft_training
+from model_inference import load_saved_model, get_model_response
+from settings import RL_OUTPUT_DIR
 
 def main_pipeline() -> None:
     """
-    Main function to run the entire training and inference pipeline.
-    It executes GRPO training, then SFT training, and finally runs an inference test.
+    This is the main pipeline that runs our whole process.
+    It first does reinforcement learning training, then fine-tuning training,
+    and finally runs an inference test using the RL-trained model.
     """
-    print("Starting GRPO training...")
-    execute_grpo_training()
+    print("Starting reinforcement learning training...")
+    run_rl_training()
     
-    print("Starting SFT training...")
-    execute_sft_training()
+    print("Starting fine-tuning training...")
+    run_ft_training()
     
-    print("Running inference test on GRPO trained model...")
-    model_instance, tokenizer_instance, device_instance = load_trained_model(OUTPUT_DIR_GRPO)
+    print("Running inference test on the RL-trained model...")
+    
+    # Load the saved RL-trained model and its tokenizer
+    model_instance, tokenizer_instance, device_instance = load_saved_model(RL_OUTPUT_DIR)
+    
     sample_input = "how are you?"
-    generated_output = run_inference_test(sample_input, model_instance, tokenizer_instance, device_instance)
+
+    # Get the model's response for our sample input
+    generated_output = get_model_response(sample_input, model_instance, tokenizer_instance, device_instance)
+    
     print("Inference Result:")
     print(generated_output)
 
