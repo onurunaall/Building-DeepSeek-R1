@@ -1,122 +1,118 @@
-# train_grpo.py
 import os
 import torch
 import logging
 from typing import List
 from transformers import TrainingArguments, TrainerCallback, TrainerControl, TrainerState
 from trl import GRPOTrainer, GRPOConfig
-from config import OUTPUT_DIR_GRPO, GRPOConfigArgs
-from data_prep import load_and_prepare_math_dataset, validate_prepared_dataset
-from model_setup import initialize_model, initialize_tokenizer
-from reward_functions import (
-    compute_accuracy_reward,
-    compute_format_reward,
-    compute_reasoning_steps_reward,
-    get_cosine_scaled_reward_function,
-    get_repetition_penalty_reward_function
-)
+from settings import RL_OUTPUT_DIR, RLTrainingSettings
+from dataset_preparation import load_and_format_math_data, check_dataset_integrity
+from model_initialization import setup_model, setup_tokenizer
+from reward_metrics import evaluate_accuracy, evaluate_format, evaluate_reasoning_steps, create_cosine_reward_func, create_repetition_penalty_func
 
-# Set up simple logging
 logger = logging.getLogger(__name__)
 
-class SimpleLoggingCallback(TrainerCallback):
-    def on_step_end(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs) -> None:
+class BasicLogger(TrainerCallback):
+    def on_step_end(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
+        # Every few steps, log the current loss and learning rate.
         if state.global_step % args.logging_steps == 0:
-            current_loss = state.log_history[-1].get('loss', None) if state.log_history else None
-            current_lr = state.log_history[-1].get('learning_rate', None) if state.log_history else None
-            logger.info(f"Step {state.global_step}: Loss = {current_loss}, Learning Rate = {current_lr}")
+            if state.log_history:
+                loss_val = state.log_history[-1].get('loss', None)
+                lr_val = state.log_history[-1].get('learning_rate', None)
+            else:
+                None
+            
+            logger.info(f"Step {state.global_step}: Loss = {loss_val}, LR = {lr_val}")
 
-def register_reward_functions(config_args: GRPOConfigArgs) -> List:
+def compile_reward_metrics(training_settings: RLTrainingSettings) -> List:
     """
-    Registers and returns a list of reward functions based on configuration arguments.
+    Based on our training settings, put together a list of reward functions we want to use.
     """
-    reward_function_registry = {
-        "accuracy": compute_accuracy_reward,
-        "format": compute_format_reward,
-        "reasoning_steps": compute_reasoning_steps_reward,
-        "cosine": get_cosine_scaled_reward_function(
-            min_wrong=config_args.cosine_min_wrong,
-            max_wrong=config_args.cosine_max_wrong,
-            min_correct=config_args.cosine_min_correct,
-            max_correct=config_args.cosine_max_correct,
-            max_length=config_args.cosine_max_length,
-        ),
-        "repetition_penalty": get_repetition_penalty_reward_function(
-            ngram_size=config_args.ngram_size_for_repetition,
-            max_penalty=config_args.repetition_max_penalty,
-        ),
+    
+    metric_registry = {
+        "accuracy": evaluate_accuracy,
+        "format": evaluate_format,
+        "reasoning_steps": evaluate_reasoning_steps,
+        "cosine": create_cosine_reward_func(low_bad=training_settings.cosine_low_bad,
+                                            high_bad=training_settings.cosine_high_bad,
+                                            low_good=training_settings.cosine_low_good,
+                                            high_good=training_settings.cosine_high_good,
+                                            length_limit=training_settings.cosine_length_limit
+                                           ),
+        "repetition_penalty": create_repetition_penalty_func(ngram=training_settings.repetition_ngram,
+                                                             penalty_value=training_settings.repetition_penalty_value
+                                                            )
     }
-    reward_functions_list: List = []
-    for func_name in config_args.reward_function_names:
-        if func_name not in reward_function_registry:
-            raise ValueError(f"Reward function '{func_name}' not found in registry.")
-        reward_functions_list.append(reward_function_registry[func_name])
-    return reward_functions_list
+    
+    compiled_metrics: List = []
+    
+    # For each metric name in our settings, add the corresponding function.
+    for metric_id in training_settings.metric_identifiers:
+        if metric_id not in metric_registry:
+            raise ValueError(f"Metric '{metric_id}' not available in registry.")
+            
+        compiled_metrics.append(metric_registry[metric_id])
+        
+    return compiled_metrics
 
-def execute_grpo_training() -> None:
+def run_rl_training() -> None:
     """
-    Executes the GRPO (reinforcement learning) training process.
-    Loads data, initializes the model, sets up reward functions, and trains the model.
+    This function runs our reinforcement learning training loop.
+    It loads the data, sets up the model, compiles reward functions, and starts training.
     """
-    # Load and validate dataset
-    math_dataset = load_and_prepare_math_dataset()
-    validate_prepared_dataset(math_dataset)
     
-    # Initialize model and tokenizer
-    language_model, compute_device = initialize_model()
-    text_tokenizer = initialize_tokenizer()
+    math_data = load_and_format_math_data()
+    check_dataset_integrity(math_data)
+    lang_model, compute_device = setup_model()
+    text_tokenizer = setup_tokenizer()
     
-    # Set up training arguments
-    training_args = TrainingArguments(
-        output_dir=OUTPUT_DIR_GRPO,
-        overwrite_output_dir=True,
-        num_train_epochs=1,
-        per_device_train_batch_size=8,
-        per_device_eval_batch_size=16,
-        gradient_accumulation_steps=2,
-        learning_rate=5e-5,
-        warmup_ratio=0.1,
-        weight_decay=0.01,
-        logging_steps=10,
-        evaluation_strategy="steps",
-        eval_steps=50,
-        save_strategy="steps",
-        save_steps=50,
-        save_total_limit=2,
-        dataloader_num_workers=2,
-        seed=42,
-        bf16=True,
-        push_to_hub=False,
-        gradient_checkpointing=True,
-        report_to="none",
-    )
-    grpo_config = GRPOConfig(**training_args.to_dict())
+    training_params = TrainingArguments(output_dir=RL_OUTPUT_DIR,
+                                        overwrite_output_dir=True,
+                                        num_train_epochs=1,
+                                        per_device_train_batch_size=8,
+                                        per_device_eval_batch_size=16,
+                                        gradient_accumulation_steps=2,
+                                        learning_rate=5e-5,
+                                        warmup_ratio=0.1,
+                                        weight_decay=0.01,
+                                        logging_steps=10,
+                                        evaluation_strategy="steps",
+                                        eval_steps=50,
+                                        save_strategy="steps",
+                                        save_steps=50,
+                                        save_total_limit=2,
+                                        dataloader_num_workers=2,
+                                        seed=42,
+                                        bf16=True,
+                                        push_to_hub=False,
+                                        gradient_checkpointing=True,
+                                        report_to="none"
+                                       )
     
-    # Register reward functions using our config arguments
-    grpo_config_args = GRPOConfigArgs()
-    reward_functions = register_reward_functions(grpo_config_args)
+
+    rl_config = GRPOConfig(**training_params.to_dict())
     
-    # Set up logging callback
-    callbacks = [SimpleLoggingCallback()]
+    training_settings = RLTrainingSettings()
+    reward_metrics_list = compile_reward_metrics(training_settings)
     
-    # Initialize GRPO Trainer
-    grpo_trainer = GRPOTrainer(
-        model=language_model,
-        reward_funcs=reward_functions,
-        args=grpo_config,
-        train_dataset=math_dataset["train"],
-        eval_dataset=math_dataset["test"],
-        callbacks=callbacks,
-    )
+    callbacks = [BasicLogger()]
     
-    # Start training
-    grpo_trainer.train()
-    print("GRPO training is complete.")
+
+    rl_trainer = GRPOTrainer(model=lang_model,
+                             reward_funcs=reward_metrics_list,
+                             args=rl_config,
+                             train_dataset=math_data["train"],
+                             eval_dataset=math_data["test"],
+                             callbacks=callbacks
+                            )
     
-    # Save model and tokenizer
-    text_tokenizer.save_pretrained(OUTPUT_DIR_GRPO)
-    grpo_trainer.save_model(OUTPUT_DIR_GRPO)
-    print(f"GRPO trained model and tokenizer saved to {OUTPUT_DIR_GRPO}")
+    # Start the training process.
+    rl_trainer.train()
+    print("Reinforcement learning training completed.")
+    
+    # Save our trained model and tokenizer.
+    text_tokenizer.save_pretrained(RL_OUTPUT_DIR)
+    rl_trainer.save_model(RL_OUTPUT_DIR)
+    print(f"Model and tokenizer saved at {RL_OUTPUT_DIR}")
 
 if __name__ == "__main__":
-    execute_grpo_training()
+    run_rl_training()
