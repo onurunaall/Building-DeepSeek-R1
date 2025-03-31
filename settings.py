@@ -10,7 +10,7 @@ FT_OUTPUT_DIR: str = os.path.join("data", "Qwen-FT-training")
 SYSTEM_TEMPLATE: str = (
     "This is a dialogue between a User and an Assistant. The user poses a query, and the Assistant resolves it. "
     "The Assistant first outlines its thought process and then gives an answer. "
-    "Wrap the thought process in <think> tags and the answer in <answer> tags."
+    "The reasoning process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively."
 )
 
 @dataclass
