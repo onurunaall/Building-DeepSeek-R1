@@ -27,9 +27,10 @@ project/
 ├── reward_metrics.py      # Definitions of reward functions
 ├── dataset_preparation.py # Dataset loading and preprocessing code
 └── README.md              # This file
-```
 
-#### main.py: The main script that runs the different stages (RL, SFT, inference).
+
+main.py: The main script that runs the different stages (RL, SFT, inference).
+```
 ##### settings.py: Contains most configuration settings like model names, output paths, and training parameters.
 ###### model_initialization.py: Code to load the initial base model and tokenizer.
 dataset_preparation.py: Loads and formats the datasets (NuminaMath-TIR, Bespoke-Stratos-17k) into the required dialogue structure.
