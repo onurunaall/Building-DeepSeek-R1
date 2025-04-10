@@ -7,25 +7,24 @@ from math_verify import LatexExtractionConfig, parse, verify
 def evaluate_accuracy(outputs: List[Any], **kwargs) -> List[float]:
     """
     Compare each model response to the correct answer and score its accuracy.
-    Returns 1.0 if the answer is right, 0.0 if it's wrong, or 0.5 if something goes wrong during parsing.
+    Returns 1.0 if the answer is right, 0.0 if it's wrong or if ground truth parsing fails.
     """
-    
+
     # Get the text content from each output.
     responses = [item[0]["content"] for item in outputs]
     scores: List[float] = []
-    
+
     # Get the ground truth answers from the provided arguments.
     ground_truths = kwargs.get("solution")
-    
+
     if ground_truths is None:
-        # If we don't have ground truth answers, give a neutral score.
-        return [0.5] * len(outputs)
-    
-    # Go through each response and its corresponding true answer.
+        # If we don't have ground truth answers, score as incorrect.
+        print("Warning: No ground truth 'solution' provided for accuracy evaluation.")
+        return [0.0] * len(outputs)
+
     for response, true_value in zip(responses, ground_truths):
-        # Try to parse the true answer.
         parsed_true = parse(true_value, extraction_mode="first_match", extraction_config=[LatexExtractionConfig()])
-        
+
         if parsed_true:
             # Parse the model's response with detailed settings.
             parsed_response = parse(
@@ -46,18 +45,22 @@ def evaluate_accuracy(outputs: List[Any], **kwargs) -> List[float]:
                 ],
                 extraction_mode="first_match",
             )
-            
-            # Compare the parsed response with the true answer.
-            score_value = float(verify(parsed_response, parsed_true))
-            
-        else:
-            score_value = 0.5  # If we can't parse the answer, default to a neutral score.
-            print("Notice: Ground truth parsing failed for:", true_value)
-            
-        scores.append(score_value)
-        
-    return scores
 
+            # Compare the parsed response with the true answer.
+            try:
+                score_value = float(verify(parsed_response, parsed_true))
+            except Exception as e:
+                print(f"Warning: Error during verification for response '{response}' against truth '{true_value}': {e}")
+                score_value = 0.0 
+
+        else:
+            score_value = 0.0
+            print(f"Warning: Ground truth parsing failed for '{true_value}'. Assigning accuracy score 0.0.")
+
+        scores.append(score_value)
+
+    return scores
+    
 def evaluate_format(outputs: List[Any], **kwargs) -> List[float]:
     """
     Check if each response is formatted with the proper <think> and <answer> tags.
