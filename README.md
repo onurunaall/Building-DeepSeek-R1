@@ -30,8 +30,8 @@ project/
 ```
 
 #### main.py: The main script that runs the different stages (RL, SFT, inference).
-settings.py: Contains most configuration settings like model names, output paths, and training parameters.
-model_initialization.py: Code to load the initial base model and tokenizer.
+##### settings.py: Contains most configuration settings like model names, output paths, and training parameters.
+###### model_initialization.py: Code to load the initial base model and tokenizer.
 dataset_preparation.py: Loads and formats the datasets (NuminaMath-TIR, Bespoke-Stratos-17k) into the required dialogue structure.
 reward_metrics.py: Defines all the custom reward functions used during RL (accuracy, format, reasoning steps, length penalty, repetition penalty).
 reinforcement_training.py: Handles the RL training loop using GRPOTrainer.
