@@ -19,27 +19,24 @@ This script handles loading data, setting up the model, running both training ph
 ### File Structure
 ```bash
 project/
-├── main.py                # Runs the entire pipeline (training and inference)
-├── settings.py            # Configuration settings for the project
-├── model_inference.py     # Code for loading and running model inference
-├── reinforcement_training.py  # RL training code
-├── fine_tuning.py         # Fine-tuning (SFT) training code
-├── reward_metrics.py      # Definitions of reward functions
-├── dataset_preparation.py # Dataset loading and preprocessing code
-└── README.md              # This file
-
+├── main.py 
+├── settings.py    
+├── model_inference.py     
+├── reinforcement_training.py  
+├── fine_tuning.py         
+├── reward_metrics.py      
+├── dataset_preparation.py 
+└── README.md              
 
 main.py: The main script that runs the different stages (RL, SFT, inference).
-```
-##### settings.py: Contains most configuration settings like model names, output paths, and training parameters.
-###### model_initialization.py: Code to load the initial base model and tokenizer.
+settings.py: Contains most configuration settings like model names, output paths, and training parameters.
+model_initialization.py: Code to load the initial base model and tokenizer.
 dataset_preparation.py: Loads and formats the datasets (NuminaMath-TIR, Bespoke-Stratos-17k) into the required dialogue structure.
 reward_metrics.py: Defines all the custom reward functions used during RL (accuracy, format, reasoning steps, length penalty, repetition penalty).
 reinforcement_training.py: Handles the RL training loop using GRPOTrainer.
 fine_tuning.py: Handles the SFT training loop using SFTTrainer.
 model_inference.py: Code for loading a saved (trained) model and running inference.
-requirements.txt: Lists the Python dependencies.
-README.md: This file!
+```
 Some Notes & Caveats
 Experimental: This is definitely experimental code. It's not optimized for speed or memory and hasn't been rigorously tested for production use. Use it as a learning resource or a starting point.
 Training Flow: The main.py currently runs RL, then SFT (on the base model, not the RL-tuned one), then tests the RL model. You might want to modify this flow depending on your goals.
