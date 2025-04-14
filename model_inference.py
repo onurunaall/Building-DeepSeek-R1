@@ -1,7 +1,7 @@
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from typing import Tuple
-from settings import RL_OUTPUT_DIR, FT_OUTPUT_DIR
+from settings import RL_OUTPUT_DIR, FT_OUTPUT_DIR, SYSTEM_TEMPLATE
 
 def load_saved_model(model_path: str) -> Tuple[AutoModelForCausalLM, AutoTokenizer, torch.device]:
     """
@@ -29,12 +29,13 @@ def get_model_response(user_input: str, model_instance: AutoModelForCausalLM, to
     """
     # Build the conversation structure with system and user messages
     dialogue = [
-        {"role": "system", "content": "You are a friendly assistant."},
+        {"role": "system", "content": SYSTEM_TEMPLATE},
         {"role": "user", "content": user_input}
     ]
   
     # Prepare the prompt text using the tokenizer's chat function
     prompt_text = tokenizer_instance.apply_chat_template(dialogue, tokenize=False, add_generation_prompt=True)
+    
     input_data = tokenizer_instance(prompt_text, return_tensors="pt").to(device_used)
   
     # Generate a response from the model
