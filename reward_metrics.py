@@ -54,7 +54,7 @@ def evaluate_accuracy(outputs: List[Any], **kwargs) -> List[float]:
                 score_value = 0.0 
 
         else:
-            score_value = 0.0
+            score_value = 0.5
             print(f"Warning: Ground truth parsing failed for '{true_value}'. Assigning accuracy score 0.0.")
 
         scores.append(score_value)
