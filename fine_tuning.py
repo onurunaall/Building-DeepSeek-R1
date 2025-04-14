@@ -13,7 +13,7 @@ def run_ft_training(input_model_path: str = MODEL_REF) -> None:
     """
     print(f"Starting fine-tuning using model from: {input_model_path}")
 
-    ft_dataset = load_dataset("bespokelabs/Bespoke-Stratos-17k", "default", split="train")
+    ft_dataset = load_dataset("HuggingFaceH4/Bespoke-Stratos-17k", "default", split="train")
 
     # Load tokenizer from the specified input model path
     ft_tokenizer = AutoTokenizer.from_pretrained(input_model_path, trust_remote_code=True, padding_side="right")
