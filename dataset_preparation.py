@@ -1,5 +1,5 @@
-from datasets import load_dataset
-from typing import Any, Dict
+from datasets import load_dataset, Dataset
+from typing import Any, Dict, Tuple
 from settings import SYSTEM_TEMPLATE
 
 def convert_example_to_dialogue(raw_example: Dict[str, Any]) -> Dict[str, Any]:
@@ -61,3 +61,18 @@ def check_dataset_integrity(formatted_data: Dict[str, Any]) -> None:
             print("✓ Dialogue structure is valid")
         else:
             print("Alert: Dialogue structure is invalid")
+
+def split_seed_refine(
+    train_dataset: Dataset,
+    seed_frac: float = 0.1,
+    seed: int = 42
+) -> Tuple[Dataset, Dataset]:
+    """
+    Split the provided train_dataset into a seed set and a refine set.
+    Returns (seed_set, refine_set) where seed_set is 'seed_frac' fraction of
+    the data, and refine_set is the remainder.
+    """
+    split = train_dataset.train_test_split(test_size=seed_frac, seed=seed)
+    seed_set = split["test"]
+    refine_set = split["train"]
+    return seed_set, refine_set
