@@ -1,3 +1,5 @@
+# main.py
+
 from reinforcement_training import run_rl_training
 from fine_tuning import run_ft_training
 from model_inference import load_saved_model, get_model_response
@@ -24,7 +26,12 @@ def main_pipeline() -> None:
     sample_input = "how are you?"
 
     # Get the model's response for our sample input
-    generated_output = get_model_response(sample_input, model_instance, tokenizer_instance, device_instance)
+    generated_output = get_model_response(
+        sample_input,
+        model_instance,
+        tokenizer_instance,
+        device_instance
+    )
 
     print("Inference Result:")
     print(generated_output)
