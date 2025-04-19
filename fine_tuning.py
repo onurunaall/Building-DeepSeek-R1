@@ -1,33 +1,51 @@
-import os
-import torch
+# fine_tuning.py
+
 from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments
 from trl import SFTTrainer
-from datasets import load_dataset
-from settings import MODEL_REF, FT_OUTPUT_DIR, RL_OUTPUT_DIR
+from dataset_preparation import load_and_format_math_data
+from settings import MODEL_REF, FT_OUTPUT_DIR
 
 def run_ft_training(input_model_path: str = MODEL_REF) -> None:
     """
-    Run the fine-tuning training loop with our curated dataset.
-    This function loads the dataset, sets up the model and tokenizer from the
-    specified input_model_path (defaulting to MODEL_REF), and starts training.
+    Run the fine-tuning training loop using our math dataset.
+    Loads the RL‑trained base model, tokenizes prompts+solutions,
+    and fine‑tunes via SFTTrainer.
     """
     print(f"Starting fine-tuning using model from: {input_model_path}")
 
-    ft_dataset = load_dataset("HuggingFaceH4/Bespoke-Stratos-17k", "default", split="train")
+    # Load and prepare math dataset
+    math_data = load_and_format_math_data()
+    ft_dataset = math_data["train"]
 
-    # Load tokenizer from the specified input model path
-    ft_tokenizer = AutoTokenizer.from_pretrained(input_model_path, trust_remote_code=True, padding_side="right")
-
-    # Make sure the tokenizer has a pad token; if not, use the EOS token.
+    # Load tokenizer
+    ft_tokenizer = AutoTokenizer.from_pretrained(
+        input_model_path, trust_remote_code=True, padding_side="right"
+    )
     if ft_tokenizer.pad_token is None:
         ft_tokenizer.pad_token = ft_tokenizer.eos_token
 
+    # Tokenization function: flatten prompt messages and append solution
+    def tokenize_fn(example):
+        conv = ""
+        for msg in example["prompt"]:
+            conv += msg["content"]
+        conv += example["solution"]
+        tok = ft_tokenizer(conv, truncation=True, padding="max_length")
+        tok["labels"] = tok["input_ids"].copy()
+        return tok
+
+    # Apply tokenization and remove original columns
+    tokenized_ds = ft_dataset.map(
+        tokenize_fn,
+        remove_columns=ft_dataset.column_names,
+    )
+
+    # Set up training arguments
     ft_training_args = TrainingArguments(
         output_dir=FT_OUTPUT_DIR,
         overwrite_output_dir=True,
         num_train_epochs=1,
         per_device_train_batch_size=8,
-        per_device_eval_batch_size=16,
         gradient_accumulation_steps=2,
         learning_rate=2e-5,
         warmup_ratio=0.1,
@@ -45,20 +63,27 @@ def run_ft_training(input_model_path: str = MODEL_REF) -> None:
         report_to="none",
     )
 
-    ft_model = AutoModelForCausalLM.from_pretrained(input_model_path, trust_remote_code=True, torch_dtype=torch.bfloat16)
+    # Load model
+    ft_model = AutoModelForCausalLM.from_pretrained(
+        input_model_path, trust_remote_code=True, torch_dtype=torch.bfloat16
+    )
 
-    ft_trainer = SFTTrainer(model=ft_model,
-                            train_dataset=ft_dataset,
-                            tokenizer=ft_tokenizer,
-                            args=ft_training_args)
+    # Initialize and run SFTTrainer
+    ft_trainer = SFTTrainer(
+        model=ft_model,
+        train_dataset=tokenized_ds,
+        tokenizer=ft_tokenizer,
+        args=ft_training_args,
+    )
 
     ft_trainer.train()
     print("Fine-tuning training completed.")
 
+    # Save artifacts
     ft_tokenizer.save_pretrained(FT_OUTPUT_DIR)
     ft_trainer.save_model(FT_OUTPUT_DIR)
-
     print(f"Fine-tuned model and tokenizer stored at {FT_OUTPUT_DIR}")
+
 
 if __name__ == "__main__":
     run_ft_training()
