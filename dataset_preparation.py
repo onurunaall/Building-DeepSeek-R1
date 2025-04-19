@@ -5,55 +5,59 @@ from settings import SYSTEM_TEMPLATE
 def convert_example_to_dialogue(raw_example: Dict[str, Any]) -> Dict[str, Any]:
     """
     Convert a raw dataset record into a dialogue format.
-    Wrap the math problem with a system instruction and a user message.
+    Preserves 'problem' and 'solution', and wraps the math problem
+    with a system instruction and a user message under 'prompt'.
     """
-  
     return {
+        "problem": raw_example["problem"],
+        "solution": raw_example["solution"],
         "prompt": [
             {"role": "system", "content": SYSTEM_TEMPLATE},
-            {"role": "user", "content": raw_example["problem"]},
-        ]
+            {"role": "user",   "content": raw_example["problem"]},
+        ],
     }
 
 def load_and_format_math_data() -> Dict[str, Any]:
     """
     Load the math problem dataset and apply dialogue formatting.
-    Returns a dictionary with 'train' and 'test' parts.
+    Returns a dict with 'train' and 'test' datasets, each containing
+    'problem', 'solution', and 'prompt' columns.
     """
     raw_data = load_dataset("AI-MO/NuminaMath-TIR", "default", split=['train', 'test'])
     split_data: Dict[str, Any] = {"train": raw_data[0], "test": raw_data[1]}
-    
-    # Convert each entry into our dialogue format
+
     for part in split_data:
+        # Map each record to include only the fields we want
         split_data[part] = split_data[part].map(convert_example_to_dialogue)
-      
-        # Remove the 'messages' column if it exists
+        # Remove legacy 'messages' column if present
         if "messages" in split_data[part].column_names:
             split_data[part] = split_data[part].remove_columns("messages")
-          
+
     return split_data
 
 def check_dataset_integrity(formatted_data: Dict[str, Any]) -> None:
     """
-    Verify that the dataset has the required fields and correct dialogue structure.
+    Verify that each split has 'prompt' and 'solution' columns,
+    and that the first record's 'prompt' follows [system, user] roles.
     """
-    required_keys = ["problem", "prompt"]
+    required_keys = ["prompt", "solution"]
     for section in ['train', 'test']:
-        print(f"\nChecking integrity of '{section}' data:")
-      
-        keys = formatted_data[section].column_names
-        missing = [key for key in required_keys if key not in keys]
-      
+        print(f"\nChecking integrity of '{section}' split:")
+        cols = formatted_data[section].column_names
+        missing = [k for k in required_keys if k not in cols]
         if missing:
             print(f"Alert: Missing keys: {missing}")
         else:
             print("✓ All necessary keys are present")
-          
-        # Verify dialogue structure in the first record
-        first_record = formatted_data[section][0]
-        dialogue = first_record.get("prompt", [])
-      
-        if len(dialogue) >= 2 and dialogue[0].get("role") == "system" and dialogue[1].get("role") == "user":
+
+        first = formatted_data[section][0]
+        dialogue = first.get("prompt", [])
+        if (
+            isinstance(dialogue, list)
+            and len(dialogue) >= 2
+            and dialogue[0].get("role") == "system"
+            and dialogue[1].get("role") == "user"
+        ):
             print("✓ Dialogue structure is valid")
         else:
             print("Alert: Dialogue structure is invalid")
