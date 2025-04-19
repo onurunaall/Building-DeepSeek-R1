@@ -7,3 +7,5 @@ math_verify==0.1.0
 numpy==1.23.5
 PyYAML==6.0
 tqdm==4.64.1
+peft
+bitsandbytes
