@@ -242,11 +242,10 @@ def create_cosine_reward_func(
     def cosine_reward(
         responses: List[Any],
         solution: List[str],
-        accuracy_rewards: List[float],
         **kwargs
     ) -> List[float]:
         texts = [item[0]["content"] for item in responses]
-        if not (len(texts) == len(solution) == len(accuracy_rewards)):
+        if not (len(texts) == len(solution)):
             print("Warning: Mismatch in lengths for cosine rewards.")
             return []
 
@@ -254,13 +253,13 @@ def create_cosine_reward_func(
             _calculate_single_cosine_reward(
                 len(text),
                 length_limit,
-                acc,
+                _verify_math_expression(text, truth),
                 low_bad,
                 high_bad,
                 low_good,
                 high_good,
             )
-            for text, acc in zip(texts, accuracy_rewards)
+            for text, truth in zip(texts, solution)
         ]
 
     return cosine_reward
