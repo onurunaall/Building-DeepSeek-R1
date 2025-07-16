@@ -4,7 +4,7 @@ plot bar charts for each metric, and print a short numeric comparison.
 
 Usage:
     python compare_two_stage.py \
-        --csv_path data/Qwen-FT-training/two_stage_metrics.csv \
+        --csv_path data/Qwen-FT-training/all_metrics.csv \
         --out_dir reports
 """
 
@@ -47,7 +47,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--csv_path",
-        default=os.path.join("data", "Qwen-FT-training", "two_stage_metrics.csv"),
+        default=os.path.join("data", "Qwen-FT-training", "all_metrics.csv"),
         help="Path to the CSV produced by run_two_stage_ft_qlora.py",
     )
     parser.add_argument(
