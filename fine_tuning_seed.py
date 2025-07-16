@@ -11,11 +11,7 @@ from trl import SFTTrainer
 from dataset_preparation import load_and_format_math_data, split_seed_refine
 from settings import MODEL_REF, FT_OUTPUT_DIR
 
-def run_seed_ft_training(
-    base_model_path: str = MODEL_REF,
-    seed_frac: float = 0.1,
-    output_dir: str = None,
-):
+def run_seed_ft_training(base_model_path: str = MODEL_REF, seed_frac: float = 0.1, output_dir: str = None):
     """
     Run supervised fine-tuning on a small 'seed' subset of the math dataset.
     Splits the full train set using seed_frac, then fine-tunes only on that subset.
@@ -31,12 +27,10 @@ def run_seed_ft_training(
     # 1. Load and split dataset
     math_data = load_and_format_math_data()
     full_train = math_data["train"]
-    seed_set, _ = split_seed_refine(full_train, seed_frac=seed_frac)
+    seed_set, refine_set = split_seed_refine(full_train, seed_frac=seed_frac)
 
     # 2. Load tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(
-        base_model_path, trust_remote_code=True, padding_side="right"
-    )
+    tokenizer = AutoTokenizer.from_pretrained(base_model_path, trust_remote_code=True, padding_side="right")
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
@@ -49,10 +43,7 @@ def run_seed_ft_training(
         return toks
 
     # 4. Apply tokenization
-    tokenized_ds = seed_set.map(
-        tokenize_fn,
-        remove_columns=seed_set.column_names,
-    )
+    tokenized_ds = seed_set.map(tokenize_fn, remove_columns=seed_set.column_names)
 
     # 5. Training arguments
     training_args = TrainingArguments(
@@ -74,20 +65,17 @@ def run_seed_ft_training(
         bf16=True,
         push_to_hub=False,
         gradient_checkpointing=True,
-        report_to="none",
-    )
+        report_to="none")
 
     # 6. Load model (fixed torch_dtype)
-    model = AutoModelForCausalLM.from_pretrained(
-        base_model_path, trust_remote_code=True, torch_dtype=torch.bfloat16
-    )
+    model = AutoModelForCausalLM.from_pretrained(base_model_path, trust_remote_code=True, torch_dtype=torch.bfloat16)
 
     # 7. Initialize trainer
     trainer = SFTTrainer(
         model=model,
         train_dataset=tokenized_ds,
         tokenizer=tokenizer,
-        args=training_args,
+        args=training_args
     )
 
     # 8. Train
@@ -98,6 +86,7 @@ def run_seed_ft_training(
     tokenizer.save_pretrained(output_dir)
     trainer.save_model(output_dir)
     print(f"Seed-fine-tuned model saved at {output_dir}")
+    return refine_set
 
 
 if __name__ == "__main__":
