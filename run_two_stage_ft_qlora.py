@@ -25,11 +25,10 @@ def evaluate_model(
 
     outputs = []
     solutions = []
+    
     for example in test_dataset:
-        # Build the prompt from system+user roles
-        prompt_text = "".join(m["content"] for m in example["prompt"])
-        # Generate the model's reply
-        reply = get_model_response(prompt_text, model, tokenizer, device)
+        # Generate the model's reply - pass only the problem text
+        reply = get_model_response(example["problem"], model, tokenizer, device)
         outputs.append([{"content": reply}])
         solutions.append(example["solution"])
 
@@ -38,10 +37,21 @@ def evaluate_model(
     fmt_scores = evaluate_format(outputs)
     reason_scores = evaluate_reasoning_steps(outputs)
 
-    # Compute averages
-    avg_acc = sum(acc_scores) / len(acc_scores) if acc_scores else 0.0
-    avg_fmt = sum(fmt_scores) / len(fmt_scores) if fmt_scores else 0.0
-    avg_reason = sum(reason_scores) / len(reason_scores) if reason_scores else 0.0
+    # Compute averages with safe division
+    if acc_scores:
+        avg_acc = sum(acc_scores) / len(acc_scores)
+    else:
+        avg_acc = 0.0
+        
+    if fmt_scores:
+        avg_fmt = sum(fmt_scores) / len(fmt_scores)
+    else:
+        avg_fmt = 0.0
+        
+    if reason_scores:
+        avg_reason = sum(reason_scores) / len(reason_scores)
+    else:
+        avg_reason = 0.0
 
     # Write to CSV
     csv_writer.writerow([method_name, avg_acc, avg_fmt, avg_reason])
@@ -62,7 +72,7 @@ def run_two_stage_ft_qlora(
 
     # Stage 1: Seed SFT
     print(f"Stage 1: Seed SFT (fraction={seed_fraction})")
-    run_seed_ft_training(
+    refine_ds = run_seed_ft_training(
         base_model_path=base_model_path,
         seed_frac=seed_fraction,
         output_dir=seed_dir,
@@ -72,6 +82,7 @@ def run_two_stage_ft_qlora(
     print("Stage 2: QLoRA fine-tuning")
     run_qlora_fine_tuning(
         base_model_path=seed_dir,
+        refine_dataset=refine_ds,
         output_dir=qlora_dir,
     )
 
@@ -88,6 +99,7 @@ def run_two_stage_ft_qlora(
     with open(metrics_file, "w", newline="") as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(["method", "accuracy", "format", "reasoning"])
+        
         evaluate_model("seed_ft", seed_dir, test_dataset, writer)
         evaluate_model("two_stage_qlora", qlora_dir, test_dataset, writer)
 
