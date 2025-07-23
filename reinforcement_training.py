@@ -94,29 +94,6 @@ def run_rl_training() -> None:
         report_to="none",
     )
 
-    # Explicitly construct GRPOConfig with supported args
-    rl_config = GRPOConfig(
-        output_dir=training_args.output_dir,
-        overwrite_output_dir=training_args.overwrite_output_dir,
-        num_train_epochs=training_args.num_train_epochs,
-        per_device_train_batch_size=training_args.per_device_train_batch_size,
-        per_device_eval_batch_size=training_args.per_device_eval_batch_size,
-        gradient_accumulation_steps=training_args.gradient_accumulation_steps,
-        learning_rate=training_args.learning_rate,
-        warmup_ratio=training_args.warmup_ratio,
-        weight_decay=training_args.weight_decay,
-        logging_steps=training_args.logging_steps,
-        evaluation_strategy=training_args.evaluation_strategy,
-        eval_steps=training_args.eval_steps,
-        save_strategy=training_args.save_strategy,
-        save_steps=training_args.save_steps,
-        save_total_limit=training_args.save_total_limit,
-        dataloader_num_workers=training_args.dataloader_num_workers,
-        seed=training_args.seed,
-        bf16=training_args.bf16,
-        gradient_checkpointing=training_args.gradient_checkpointing,
-    )
-
     # Compile reward functions
     training_settings = RLTrainingSettings()
     reward_funcs = compile_reward_metrics(training_settings)
@@ -129,7 +106,7 @@ def run_rl_training() -> None:
         model=lang_model,
         tokenizer=text_tokenizer,
         reward_funcs=reward_funcs,
-        args=rl_config,
+        args=training_args,
         train_dataset=math_data["train"],
         eval_dataset=math_data["test"],
         data_collator=default_data_collator,
