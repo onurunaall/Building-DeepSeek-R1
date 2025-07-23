@@ -11,7 +11,7 @@ from trl import SFTTrainer
 from dataset_preparation import load_and_format_math_data, split_seed_refine
 from settings import MODEL_REF, FT_OUTPUT_DIR
 
-def run_seed_ft_training(base_model_path: str = MODEL_REF, seed_frac: float = 0.1, output_dir: str = None):
+def run_seed_ft_training(base_model_path: str = MODEL_REF, seed_frac: float = 0.1, output_dir: str = None, train_dataset=None):
     """
     Run supervised fine-tuning on a small 'seed' subset of the math dataset.
     Splits the full train set using seed_frac, then fine-tunes only on that subset.
@@ -24,9 +24,14 @@ def run_seed_ft_training(base_model_path: str = MODEL_REF, seed_frac: float = 0.
     print(f"Starting seed SFT (fraction={seed_frac}) from {base_model_path}")
     print(f"Saving seed-fine-tuned model to: {output_dir}")
 
-    # 1. Load and split dataset
-    math_data = load_and_format_math_data()
-    full_train = math_data["train"]
+    # 1. Load dataset if not provided
+    if train_dataset is None:
+        math_data = load_and_format_math_data()
+        full_train = math_data["train"]
+    else:
+        full_train = train_dataset
+        
+    # Split dataset
     seed_set, refine_set = split_seed_refine(full_train, seed_frac=seed_frac)
 
     # 2. Load tokenizer
