@@ -1,11 +1,9 @@
 # main.py
 """
-Runs every stage end‑to‑end:
-  1. RL training (optional)
-  2. Full‑dataset supervised FT   → data/Qwen-FT-training
-  3. Seed‑subset supervised FT    → data/Qwen-FT-training/seed
-  4. QLoRA on refine set          → data/Qwen-FT-training/qlora
-  5. Evaluation on held‑out test  → data/Qwen-FT-training/all_metrics.csv
+Runs three experiments to compare fine-tuning methods:
+  1. Baseline: Full-parameter SFT on entire dataset
+  2. QLoRA: Parameter-efficient fine-tuning on entire dataset  
+  3. Two-Stage: Seed SFT (10%) + QLoRA on remainder (90%)
 """
 
 import os
@@ -49,48 +47,70 @@ def evaluate_model(method: str, model_dir: str, test_ds, writer: csv.writer):
     print(f"  accuracy={acc:.4f}  format={fmt:.4f}  reasoning={rea:.4f}")
 
 def main_pipeline():
-    baseline_dir = FT_OUTPUT_DIR                        # full‑dataset SFT
-    seed_dir = os.path.join(FT_OUTPUT_DIR, "seed")      # seed SFT
-    qlora_dir = os.path.join(FT_OUTPUT_DIR, "qlora")    # two‑stage QLoRA
-    metrics_csv = os.path.join(FT_OUTPUT_DIR, "all_metrics.csv")
-    os.makedirs(FT_OUTPUT_DIR, exist_ok=True)
+    print("\n== Loading and Preparing Data ==")
+    datasets = load_and_format_math_data()
+    train_ds = datasets["train"]
+    test_ds = datasets["test"]
 
-    # 1. Reinforcement learning (comment out if you want to skip)
+    # 1. Reinforcement learning (provides base checkpoint)
     print("\n== RL training ==")
-    run_rl_training() # outputs to RL_OUTPUT_DIR
-    base_ckpt = RL_OUTPUT_DIR # later stages start here
+    run_rl_training()
+    base_ckpt = RL_OUTPUT_DIR
 
-    # 2. Full‑dataset supervised FT (baseline)
-    print("\n== Full‑dataset supervised FT ==")
-    run_ft_training(input_model_path=base_ckpt) # writes to baseline_dir
+    # Define output directories
+    baseline_dir = os.path.join(FT_OUTPUT_DIR, "full_sft")
+    qlora_full_dir = os.path.join(FT_OUTPUT_DIR, "qlora_full")
+    seed_dir = os.path.join(FT_OUTPUT_DIR, "seed")
+    qlora_two_stage_dir = os.path.join(FT_OUTPUT_DIR, "qlora_two_stage")
+    
+    os.makedirs(baseline_dir, exist_ok=True)
+    os.makedirs(qlora_full_dir, exist_ok=True)
+    os.makedirs(qlora_two_stage_dir, exist_ok=True)
 
-    # 3. Seed subset FT (10 %)
-    print("\n== Seed (10 %) supervised FT ==")
+    # Experiment 1: Full SFT (Baseline)
+    print("\n== Experiment 1: Full-dataset Supervised FT ==")
+    run_ft_training(
+        input_model_path=base_ckpt, 
+        output_dir=baseline_dir, 
+        train_dataset=train_ds
+    )
+
+    # Experiment 2: QLoRA on Full Dataset
+    print("\n== Experiment 2: QLoRA on Full Dataset ==")
+    run_qlora_fine_tuning(
+        base_model_path=base_ckpt,
+        refine_dataset=train_ds,  # Use the full training set
+        output_dir=qlora_full_dir,
+    )
+
+    # Experiment 3: Two-Stage Seed + QLoRA
+    print("\n== Experiment 3: Two-Stage Seed FT + QLoRA ==")
+    print("  Stage 3a: Seed (10%) supervised FT")
     refine_ds = run_seed_ft_training(
         base_model_path=base_ckpt,
         seed_frac=0.10,
         output_dir=seed_dir,
+        train_dataset=train_ds  # Pass the full train set to be split
     )
-
-    # 4. QLoRA on the remaining 90 %
-    print("\n== QLoRA fine‑tuning on refine set ==")
+    
+    print("  Stage 3b: QLoRA fine-tuning on refine set")
     run_qlora_fine_tuning(
         base_model_path=seed_dir,
         refine_dataset=refine_ds,
-        output_dir=qlora_dir,
+        output_dir=qlora_two_stage_dir,
     )
 
-    # 5. Evaluation
-    print("\n== Evaluation on held‑out test split ==")
-    test_ds = load_and_format_math_data()["test"]
+    # Evaluation
+    print("\n== Evaluation on held-out test split ==")
+    metrics_csv = os.path.join(FT_OUTPUT_DIR, "all_metrics.csv")
     
     with open(metrics_csv, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["method", "accuracy", "format", "reasoning"])
         
-        evaluate_model("baseline_full_sft", baseline_dir, test_ds, writer)
-        evaluate_model("seed_ft", seed_dir, test_ds, writer)
-        evaluate_model("two_stage_qlora", qlora_dir, test_ds, writer)
+        evaluate_model("full_sft", baseline_dir, test_ds, writer)
+        evaluate_model("qlora_full_sft", qlora_full_dir, test_ds, writer)
+        evaluate_model("two_stage_qlora", qlora_two_stage_dir, test_ds, writer)
 
     print(f"\nAll metrics saved to {metrics_csv}")
     print("Pipeline finished.")
