@@ -1,21 +1,30 @@
 # fine_tuning.py
 
+import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments
 from trl import SFTTrainer
 from dataset_preparation import load_and_format_math_data
 from settings import MODEL_REF, FT_OUTPUT_DIR
 
-def run_ft_training(input_model_path: str = MODEL_REF) -> None:
+def run_ft_training(input_model_path: str = MODEL_REF, output_dir: str = None, train_dataset=None) -> None:
     """
     Run the fine-tuning training loop using our math dataset.
     Loads the RL‑trained base model, tokenizes prompts+solutions,
     and fine‑tunes via SFTTrainer.
     """
+    # Use default output dir if not specified
+    if output_dir is None:
+        output_dir = FT_OUTPUT_DIR
+        
     print(f"Starting fine-tuning using model from: {input_model_path}")
+    print(f"Output directory: {output_dir}")
 
-    # Load and prepare math dataset
-    math_data = load_and_format_math_data()
-    ft_dataset = math_data["train"]
+    # Load dataset if not provided
+    if train_dataset is None:
+        math_data = load_and_format_math_data()
+        ft_dataset = math_data["train"]
+    else:
+        ft_dataset = train_dataset
 
     # Load tokenizer
     ft_tokenizer = AutoTokenizer.from_pretrained(
@@ -42,7 +51,7 @@ def run_ft_training(input_model_path: str = MODEL_REF) -> None:
 
     # Set up training arguments
     ft_training_args = TrainingArguments(
-        output_dir=FT_OUTPUT_DIR,
+        output_dir=output_dir,
         overwrite_output_dir=True,
         num_train_epochs=1,
         per_device_train_batch_size=8,
@@ -80,9 +89,9 @@ def run_ft_training(input_model_path: str = MODEL_REF) -> None:
     print("Fine-tuning training completed.")
 
     # Save artifacts
-    ft_tokenizer.save_pretrained(FT_OUTPUT_DIR)
-    ft_trainer.save_model(FT_OUTPUT_DIR)
-    print(f"Fine-tuned model and tokenizer stored at {FT_OUTPUT_DIR}")
+    ft_tokenizer.save_pretrained(output_dir)
+    ft_trainer.save_model(output_dir)
+    print(f"Fine-tuned model and tokenizer stored at {output_dir}")
 
 
 if __name__ == "__main__":
