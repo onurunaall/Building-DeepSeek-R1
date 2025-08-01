@@ -1,59 +1,69 @@
-# fine_tuning_qlora.py
-
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM, TrainingArguments, BitsAndBytesConfig, default_data_collator
 from peft import prepare_model_for_kbit_training, LoraConfig, get_peft_model
 from trl import SFTTrainer
-from dataset_preparation import load_and_format_math_data
-from settings import FT_OUTPUT_DIR, MODEL_REF
 
-def run_qlora_fine_tuning(base_model_path: str, refine_dataset, output_dir: str,):
+def create_tokenized_dataset(example, tokenizer):
+    """
+    Applies the tokenizer's chat template to a single example.
+    """
+    full_conversation = example["prompt"] + [{"role": "assistant", "content": example["solution"]}]
+
+    tokenized_inputs = tokenizer.apply_chat_template(full_conversation,
+                                                     truncation=True,
+                                                     padding="max_length",
+                                                     return_tensors="pt")
+    
+    return {
+        "input_ids": tokenized_inputs["input_ids"].squeeze(),
+        "attention_mask": tokenized_inputs["attention_mask"].squeeze(),
+        "labels": tokenized_inputs["input_ids"].squeeze().clone(),
+    }
+
+
+def run_qlora_fine_tuning(base_model_path: str,
+                            refine_dataset,
+                            output_dir: str):
+    """
+    Performs parameter-efficient fine-tuning (PEFT) using QLoRA.
+    """
     print(f"Starting QLoRA fine-tuning on: {base_model_path}")
 
-    # 2. tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(base_model_path, trust_remote_code=True, padding_side="right")
+    # Step 1: Load tokenizer and prepare the dataset
+    tokenizer = AutoTokenizer.from_pretrained(base_model_path,
+                                              trust_remote_code=True,
+                                              padding_side="right")
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    # 3. model in 4-bit
-    quant_cfg = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype=torch.bfloat16,
-        bnb_4bit_use_double_quant=True,
-    )
-    
-    model = AutoModelForCausalLM.from_pretrained(
-        base_model_path,
-        quantization_config=quant_cfg,
-        device_map="auto",
-        trust_remote_code=True,
-    )
-    
+    tokenized_dataset = refine_dataset.map(lambda x: create_tokenized_dataset(x, tokenizer),
+                                           remove_columns=refine_dataset.column_names)
+
+    # Step 2: Configure 4-bit quantization
+    quant_config = BitsAndBytesConfig(load_in_4bit=True,
+                                      bnb_4bit_quant_type="nf4",
+                                      bnb_4bit_compute_dtype=torch.bfloat16,
+                                      bnb_4bit_use_double_quant=True)
+
+    # Step 3: Load the quantized model
+    model = AutoModelForCausalLM.from_pretrained(base_model_path,
+                                                 quantization_config=quant_config,
+                                                 device_map="auto",
+                                                 trust_remote_code=True)
+                                
     model = prepare_model_for_kbit_training(model)
 
-    # 4. apply LoRA
-    lora_cfg = LoraConfig(
-        r=8,
-        lora_alpha=32,
-        target_modules=["q_proj", "v_proj"],
-        lora_dropout=0.05,
-        bias="none",
-        task_type="CAUSAL_LM",
-    )
-    model = get_peft_model(model, lora_cfg)
+    # Step 4: Configure and apply LoRA adapters
+    lora_config = LoraConfig(r=8,
+                             lora_alpha=32,
+                             target_modules=["q_proj", "v_proj"],
+                             lora_dropout=0.05,
+                             bias="none",
+                             task_type="CAUSAL_LM")
+                                
+    model = get_peft_model(model, lora_config)
 
-    # 5. tokenize examples
-    def tokenize_fn(example):
-        text = "".join(m["content"] for m in example["prompt"])
-        text += example["solution"]
-        tokens = tokenizer(text, truncation=True, padding="max_length")
-        tokens["labels"] = tokens["input_ids"].copy()
-        return tokens
-
-    tokenized = refine_dataset.map(tokenize_fn,remove_columns=refine_dataset.column_names)
-
-    # 6. training args
+    # Step 5: Configure training arguments
     training_args = TrainingArguments(
         output_dir=output_dir,
         overwrite_output_dir=True,
@@ -71,19 +81,18 @@ def run_qlora_fine_tuning(base_model_path: str, refine_dataset, output_dir: str,
         report_to="none",
     )
 
-    # 7. trainer
-    trainer = SFTTrainer(
-        model=model,
-        train_dataset=tokenized,
-        tokenizer=tokenizer,
-        args=training_args,
-        data_collator=default_data_collator)
-        
+    # Step 6: Initialize and run the SFTTrainer
+    trainer = SFTTrainer(model=model,
+                         train_dataset=tokenized_dataset,
+                         tokenizer=tokenizer,
+                         args=training_args,
+                         data_collator=default_data_collator)
+
+    print("Starting QLoRA training...")
     trainer.train()
+    print("QLoRA fine-tuning completed.")
 
-    tokenizer.save_pretrained(output_dir)
+    # Step 7: Save the final model and tokenizer
     trainer.save_model(output_dir)
+    tokenizer.save_pretrained(output_dir)
     print(f"QLoRA fine-tuned model saved at {output_dir}")
-
-if __name__ == "__main__":
-    run_qlora_fine_tuning()
