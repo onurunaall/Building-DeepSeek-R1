@@ -1,22 +1,36 @@
-# fine_tuning_seed.py
-
 import os
 import torch
-from transformers import (
-    AutoTokenizer,
-    AutoModelForCausalLM,
-    TrainingArguments
-)
+from transformers import AutoTokenizer, AutoModelForCausalLM, TrainingArguments
 from trl import SFTTrainer
 from dataset_preparation import load_and_format_math_data, split_seed_refine
 from settings import MODEL_REF, FT_OUTPUT_DIR
 
-def run_seed_ft_training(base_model_path: str = MODEL_REF, seed_frac: float = 0.1, output_dir: str = None, train_dataset=None):
+def create_tokenized_dataset(example, tokenizer):
     """
-    Run supervised fine-tuning on a small 'seed' subset of the math dataset.
-    Splits the full train set using seed_frac, then fine-tunes only on that subset.
+    Applies the tokenizer's chat template to a single example.
     """
-    # Determine output directory for seed FT
+    full_conversation = example["prompt"] + [{"role": "assistant", "content": example["solution"]}]
+
+    tokenized_inputs = tokenizer.apply_chat_template(full_conversation,
+                                                     truncation=True,
+                                                     padding="max_length",
+                                                     return_tensors="pt")
+    
+    return {
+        "input_ids": tokenized_inputs["input_ids"].squeeze(),
+        "attention_mask": tokenized_inputs["attention_mask"].squeeze(),
+        "labels": tokenized_inputs["input_ids"].squeeze().clone(),
+    }
+
+
+def run_seed_ft_training(base_model_path: str = MODEL_REF,
+                         seed_frac: float = 0.1,
+                         output_dir: str = None,
+                         train_dataset=None):
+    """
+    Runs supervised fine-tuning on a small 'seed' subset of the dataset.
+    """
+    # Step 1: Determine output directory and load the full dataset
     if output_dir is None:
         output_dir = os.path.join(FT_OUTPUT_DIR, "seed")
     os.makedirs(output_dir, exist_ok=True)
@@ -24,33 +38,26 @@ def run_seed_ft_training(base_model_path: str = MODEL_REF, seed_frac: float = 0.
     print(f"Starting seed SFT (fraction={seed_frac}) from {base_model_path}")
     print(f"Saving seed-fine-tuned model to: {output_dir}")
 
-    # 1. Load dataset if not provided
     if train_dataset is None:
         math_data = load_and_format_math_data()
-        full_train = math_data["train"]
+        full_train_dataset = math_data["train"]
     else:
-        full_train = train_dataset
-        
-    # Split dataset
-    seed_set, refine_set = split_seed_refine(full_train, seed_frac=seed_frac)
+        full_train_dataset = train_dataset
 
-    # 2. Load tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(base_model_path, trust_remote_code=True, padding_side="right")
+    # Split the dataset into a small seed set and a larger refine set
+    seed_set, refine_set = split_seed_refine(full_train_dataset, seed_frac=seed_frac)
+
+    # Step 2: Load tokenizer and prepare the seed dataset
+    tokenizer = AutoTokenizer.from_pretrained(base_model_path,
+                                              trust_remote_code=True,
+                                              padding_side="right")
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    # 3. Tokenization function
-    def tokenize_fn(example):
-        text = "".join(m["content"] for m in example["prompt"])
-        text += example["solution"]
-        toks = tokenizer(text, truncation=True, padding="max_length")
-        toks["labels"] = toks["input_ids"].copy()
-        return toks
+    tokenized_ds = seed_set.map(lambda x: create_tokenized_dataset(x, tokenizer),
+                                remove_columns=seed_set.column_names)
 
-    # 4. Apply tokenization
-    tokenized_ds = seed_set.map(tokenize_fn, remove_columns=seed_set.column_names)
-
-    # 5. Training arguments
+    # Step 3: Configure training arguments
     training_args = TrainingArguments(
         output_dir=output_dir,
         overwrite_output_dir=True,
@@ -61,36 +68,38 @@ def run_seed_ft_training(base_model_path: str = MODEL_REF, seed_frac: float = 0.
         warmup_ratio=0.1,
         weight_decay=0.01,
         logging_steps=10,
-        evaluation_strategy="no",
         save_strategy="steps",
         save_steps=50,
         save_total_limit=2,
+        bf16=True,
+        gradient_checkpointing=True,
         dataloader_num_workers=2,
         seed=42,
-        bf16=True,
-        push_to_hub=False,
-        gradient_checkpointing=True,
-        report_to="none")
-
-    # 6. Load model (fixed torch_dtype)
-    model = AutoModelForCausalLM.from_pretrained(base_model_path, trust_remote_code=True, torch_dtype=torch.bfloat16)
-
-    # 7. Initialize trainer
-    trainer = SFTTrainer(
-        model=model,
-        train_dataset=tokenized_ds,
-        tokenizer=tokenizer,
-        args=training_args
+        report_to="none",
+        push_to_hub=False
     )
 
-    # 8. Train
+    # Step 4: Load the base model
+    model = AutoModelForCausalLM.from_pretrained(base_model_path,
+                                                 trust_remote_code=True,
+                                                 torch_dtype=torch.bfloat16)
+
+    # Step 5: Initialize and run the SFTTrainer
+    trainer = SFTTrainer(model=model,
+                         train_dataset=tokenized_ds,
+                         tokenizer=tokenizer,
+                         args=training_args)
+
+    print("Starting seed training...")
     trainer.train()
     print("Seed SFT completed.")
 
-    # 9. Save artifacts
-    tokenizer.save_pretrained(output_dir)
+    # Step 6: Save the trained model and tokenizer
     trainer.save_model(output_dir)
+    tokenizer.save_pretrained(output_dir)
     print(f"Seed-fine-tuned model saved at {output_dir}")
+
+    # Return the unused portion of the data for the next stage
     return refine_set
 
 
