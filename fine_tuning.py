@@ -35,13 +35,24 @@ def run_ft_training(input_model_path: str = MODEL_REF, output_dir: str = None, t
 
     # Tokenization function: flatten prompt messages and append solution
     def tokenize_fn(example):
-        conv = ""
-        for msg in example["prompt"]:
-            conv += msg["content"]
-        conv += example["solution"]
-        tok = ft_tokenizer(conv, truncation=True, padding="max_length")
-        tok["labels"] = tok["input_ids"].copy()
-        return tok
+        # The 'prompt' column is already a list of dicts with 'role' and 'content'
+        # Add the assistant's solution to complete the conversation
+        full_conversation = example["prompt"] + [{"role": "assistant", "content": example["solution"]}]
+    
+        # Apply the tokenizer's chat template
+        tokenized_inputs = ft_tokenizer.apply_chat_template(
+            full_conversation,
+            truncation=True,
+            padding="max_length",
+            return_tensors="pt"
+        )
+    
+        # For SFT, the labels are typically the same as the input_ids
+        return {
+            "input_ids": tokenized_inputs["input_ids"].squeeze(),
+            "attention_mask": tokenized_inputs["attention_mask"].squeeze(),
+            "labels": tokenized_inputs["input_ids"].squeeze().clone(), # Use .clone() to be safe
+        }
 
     # Apply tokenization and remove original columns
     tokenized_ds = ft_dataset.map(
