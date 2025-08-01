@@ -109,7 +109,6 @@ def run_ft_training(input_model_path: str = MODEL_REF,
     ft_trainer.train()
     print("Fine-tuning training completed successfully.")
 
-    # Step 6: Save the Final Model and Tokenizer
     print(f"Saving fine-tuned model and tokenizer to {output_dir}...")
     ft_trainer.save_model(output_dir)
     ft_tokenizer.save_pretrained(output_dir)
