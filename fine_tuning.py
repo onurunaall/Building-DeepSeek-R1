@@ -1,5 +1,3 @@
-# fine_tuning.py
-
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments
 from trl import SFTTrainer
@@ -15,9 +13,10 @@ def create_tokenized_dataset(example, tokenizer):
 
     # Apply the tokenizer's built-in chat template
     tokenized_inputs = tokenizer.apply_chat_template(full_conversation,
-                                                         truncation=True,
-                                                         padding="max_length",
-                                                         return_tensors="pt")
+                                                     truncation=True,
+                                                     padding="max_length",
+                                                     return_tensors="pt")
+    
     # For SFT, the labels are the input_ids
     return {
         "input_ids": tokenized_inputs["input_ids"].squeeze(),
@@ -81,9 +80,9 @@ def run_ft_training(input_model_path: str = MODEL_REF,
 
     # Step 5: Initialize and run the SFTTrainer
     ft_trainer = SFTTrainer(model=ft_model,
-                          train_dataset=tokenized_ds,
-                          tokenizer=ft_tokenizer,
-                          args=ft_training_args)
+                            train_dataset=tokenized_ds,
+                            tokenizer=ft_tokenizer,
+                            args=ft_training_args)
 
     print("Starting training...")
     ft_trainer.train()
