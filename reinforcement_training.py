@@ -2,23 +2,19 @@ import os
 import torch
 import logging
 from typing import List
-from transformers import TrainingArguments, TrainerCallback, TrainerControl, TrainerState, default_data_collator
+from transformers import TrainerCallback, TrainerControl, TrainerState
+
 from trl import GRPOTrainer, GRPOConfig
 from settings import RL_OUTPUT_DIR, RLTrainingSettings
 from dataset_preparation import load_and_format_math_data, check_dataset_integrity
 from model_initialization import setup_model, setup_tokenizer
-from reward_metrics import (
-    evaluate_accuracy,
-    evaluate_format,
-    evaluate_reasoning_steps,
-    create_cosine_reward_func,
-    create_repetition_penalty_func,
-)
+from reward_metrics import evaluate_accuracy, evaluate_format, evaluate_reasoning_steps, create_cosine_reward_func, create_repetition_penalty_func
 
 logger = logging.getLogger(__name__)
 
+
 class BasicLogger(TrainerCallback):
-    def on_step_end(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
+    def on_step_end(self, args: GRPOConfig, state: TrainerState, control: TrainerControl, **kwargs):
         if state.global_step % args.logging_steps == 0:
             if state.log_history:
                 loss_val = state.log_history[-1].get("loss", None)
@@ -26,6 +22,7 @@ class BasicLogger(TrainerCallback):
             else:
                 loss_val, lr_val = None, None
             logger.info(f"Step {state.global_step}: Loss = {loss_val}, LR = {lr_val}")
+
 
 def compile_reward_metrics(training_settings: RLTrainingSettings) -> List:
     metric_registry = {
@@ -42,8 +39,7 @@ def compile_reward_metrics(training_settings: RLTrainingSettings) -> List:
         "repetition_penalty": create_repetition_penalty_func(
             ngram=training_settings.repetition_ngram,
             penalty_value=training_settings.repetition_penalty_value,
-        ),
-    }
+        )}
 
     compiled_metrics: List = []
     for metric_id in training_settings.metric_identifiers:
@@ -53,14 +49,16 @@ def compile_reward_metrics(training_settings: RLTrainingSettings) -> List:
 
     return compiled_metrics
 
+
 def run_rl_training() -> None:
     """
-    Run reinforcement learning training:
+    Run reinforcement learning training using VERIFIED GRPOTrainer API:
     - Load and format data (with 'prompt' and 'solution').
     - Initialize model & tokenizer.
     - Compile reward functions.
-    - Start GRPO training with tokenizer and data collator.
+    - Start GRPO training with correct GRPOConfig.
     """
+
     # Load and validate dataset
     math_data = load_and_format_math_data()
     check_dataset_integrity(math_data)
@@ -69,8 +67,8 @@ def run_rl_training() -> None:
     lang_model, compute_device = setup_model()
     text_tokenizer = setup_tokenizer()
 
-    # Prepare training args for both Trainer and GRPOConfig
-    training_args = TrainingArguments(
+    # GRPOConfig is a subclass of TrainingArguments with GRPO-specific parameters
+    training_args = GRPOConfig(
         output_dir=RL_OUTPUT_DIR,
         overwrite_output_dir=True,
         num_train_epochs=1,
@@ -91,8 +89,7 @@ def run_rl_training() -> None:
         bf16=True,
         push_to_hub=False,
         gradient_checkpointing=True,
-        report_to="none",
-    )
+        report_to="none")
 
     # Compile reward functions
     training_settings = RLTrainingSettings()
@@ -101,17 +98,13 @@ def run_rl_training() -> None:
     # Set up callbacks
     callbacks = [BasicLogger()]
 
-    # Initialize GRPOTrainer with tokenizer and data collator
-    rl_trainer = GRPOTrainer(
-        model=lang_model,
-        tokenizer=text_tokenizer,
-        reward_funcs=reward_funcs,
-        args=training_args,
-        train_dataset=math_data["train"],
-        eval_dataset=math_data["test"],
-        data_collator=default_data_collator,
-        callbacks=callbacks,
-    )
+    rl_trainer = GRPOTrainer(model=lang_model,
+    							  tokenizer=text_tokenizer,
+        					  reward_funcs=reward_funcs,
+        					  args=training_args,
+        					  train_dataset=math_data["train"],
+        					  eval_dataset=math_data["test"],
+        					  callbacks=callbacks)
 
     # Start training
     rl_trainer.train()
@@ -121,6 +114,7 @@ def run_rl_training() -> None:
     text_tokenizer.save_pretrained(RL_OUTPUT_DIR)
     rl_trainer.save_model(RL_OUTPUT_DIR)
     print(f"Model and tokenizer saved at {RL_OUTPUT_DIR}")
+
 
 if __name__ == "__main__":
     run_rl_training()
