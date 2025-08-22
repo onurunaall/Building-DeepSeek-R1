@@ -1,0 +1,58 @@
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "experimental-rl-language-model-fine-tuning"
+version = "0.1.0"
+description = "Experimental playground for combining RL and SFT on smaller language models"
+authors = ["Onur Unal"]
+readme = "README.md"
+packages = [{include = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+torch = ">=1.13.1"
+numpy = ">=1.23.5"
+PyYAML = ">=6.0"
+tqdm = ">=4.64.1"
+transformers = ">=4.28.1"
+datasets = ">=2.10.1"
+trl = ">=0.4.3"
+peft = "*"
+bitsandbytes = "*"
+accelerate = "*"
+latex2sympy2-extended = ">=0.1.0"
+math-verify = ">=0.1.0"
+matplotlib = "*"
+pandas = "*"
+
+[tool.poetry.group.dev.dependencies]
+black = "*"
+isort = "*"
+ruff = "*"
+pytest = "*"
+pre-commit = "*"
+
+[tool.poetry.scripts]
+train = "main:main_pipeline"
+plot = "plot_results:main"
+
+[tool.black]
+line-length = 88
+target-version = ['py39']
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+
+[tool.ruff]
+line-length = 88
+target-version = "py39"
+select = ["E", "W", "F", "I", "N", "UP"]
+ignore = ["E501"]
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["F401"]
