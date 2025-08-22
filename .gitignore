@@ -1,0 +1,28 @@
+# Poetry
+poetry.lock
+dist/
+*.egg-info/
+
+# Training outputs
+data/
+reports/
+wandb/
+checkpoints/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
