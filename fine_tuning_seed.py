@@ -400,7 +400,7 @@ def run_seed_ft_training(
         trainer = SFTTrainer(
             model=model,
             train_dataset=tokenized_ds,
-            tokenizer=tokenizer,
+            processing_class=tokenizer,
             args=training_args
         )
     except Exception as e:
