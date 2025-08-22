@@ -1,4 +1,3 @@
-# model_inference.py
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -31,29 +30,42 @@ def get_model_response(
     device: torch.device
 ) -> str:
     """
-    Generate a response by concatenating SYSTEM_TEMPLATE and user_input,
-    then slicing off the prompt tokens from the model's output.
+    Generate a model response using the training-consistent chat template.
     """
-    prompt_text = SYSTEM_TEMPLATE + "\n" + user_input
-    inputs = tokenizer(prompt_text, return_tensors="pt")
-    inputs = {k: v.to(device) for k, v in inputs.items()}
 
-    input_len = inputs["input_ids"].shape[1]
+    # Format messages in chat-style structure
+    messages = [{"role": "system", "content": SYSTEM_TEMPLATE}, {"role": "user", "content": user_input}]
+
+    # Tokenize messages with generation prompt
+    inputs = tokenizer.apply_chat_template(
+        messages,
+        add_generation_prompt=True,
+        return_tensors="pt",
+        return_dict=True,
+    )
+
+    # Move tensors to the correct device (CPU/GPU)
+    inputs = {name: tensor.to(device) for name, tensor in inputs.items()}
+
+    # Track prompt length for slicing later
+    prompt_length = inputs["input_ids"].shape[1]
+
+    # Generate response tokens
     output_tokens = model.generate(
         **inputs,
         max_new_tokens=200,
         do_sample=True,
-        temperature=0.7
+        temperature=0.7,
     )
 
-    # Slice off the prompt tokens to get only the generated reply
-    gen_tokens = output_tokens[0][input_len:]
-    response = tokenizer.decode(gen_tokens, skip_special_tokens=True)
+    # Remove prompt tokens, keep only generated part
+    generated_tokens = output_tokens[0][prompt_length:]
+
+    # Decode tokens to string response
+    response = tokenizer.decode(generated_tokens, skip_special_tokens=True)
 
     return response
-
 if __name__ == "__main__":
-    # Adjust to FT_OUTPUT_DIR if you want the fine‑tuned model
     model_dir = RL_OUTPUT_DIR
     model, tokenizer, device = load_saved_model(model_dir)
 
