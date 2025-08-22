@@ -1,4 +1,3 @@
-# main.py
 """
 Runs three experiments to compare fine-tuning methods:
   1. Baseline: Full-parameter SFT on entire dataset
@@ -86,20 +85,10 @@ def main_pipeline():
     # Experiment 3: Two-Stage Seed + QLoRA
     print("\n== Experiment 3: Two-Stage Seed FT + QLoRA ==")
     print("  Stage 3a: Seed (10%) supervised FT")
-    refine_ds = run_seed_ft_training(
-        base_model_path=base_ckpt,
-        seed_frac=0.10,
-        output_dir=seed_dir,
-        train_dataset=train_ds  # Pass the full train set to be split
-    )
-    
-    print("  Stage 3b: QLoRA fine-tuning on refine set")
-    run_qlora_fine_tuning(
-        base_model_path=seed_dir,
-        refine_dataset=refine_ds,
-        output_dir=qlora_two_stage_dir,
-    )
-
+    refine_ds, training_analysis = run_seed_ft_training(base_model_path=base_ckpt, seed_frac=0.10, output_dir=seed_dir, train_dataset=train_ds)
+		print("  Stage 3b: QLoRA fine-tuning on refine set")
+		run_qlora_fine_tuning(base_model_path=seed_dir, refine_dataset=refine_ds, output_dir=qlora_two_stage_dir)
+  
     # Evaluation
     print("\n== Evaluation on held-out test split ==")
     metrics_csv = os.path.join(FT_OUTPUT_DIR, "all_metrics.csv")
