@@ -74,96 +74,6 @@ def _create_tokenized_dataset(example: Dict[str, Any], tokenizer: AutoTokenizer)
     }
 
 
-def find_target_modules(
-    model: torch.nn.Module,
-    include_patterns: List[str] = None,
-    exclude_patterns: List[str] = None
-) -> List[str]:
-    """
-    Dynamically find target modules for LoRA adaptation.
-
-    This function inspects the model architecture to find appropriate linear layers
-    for LoRA adaptation, avoiding hard-coded module names that may not exist.
-
-    Args:
-        model: The model to inspect
-        include_patterns: List of patterns to include (e.g., ['q_proj', 'v_proj'])
-        exclude_patterns: List of patterns to exclude (e.g., ['lm_head', 'embed'])
-        
-    Returns:
-        List of module names suitable for LoRA targeting
-    """
-    if include_patterns is None:
-        include_patterns = [
-            "q_proj", "k_proj", "v_proj", "o_proj",
-            "query", "key", "value", "out",
-            "c_attn", "c_proj",
-            "query_key_value",
-            "attention.wq", "attention.wk", "attention.wv", "attention.wo",
-        ]
-
-    if exclude_patterns is None:
-        exclude_patterns = [
-            "lm_head", "embed", "wte", "wpe",
-            "ln", "norm", "layer_norm",
-            "bias", "scale"
-        ]
-
-    target_modules = set()
-
-    for name, module in model.named_modules():
-        if not isinstance(module, torch.nn.Linear):
-            continue
-            
-        module_name = name.split(".")[-1]
-        
-        # Check include patterns
-        should_include = False
-        for pattern in include_patterns:
-            if pattern in name.lower() or pattern in module_name.lower():
-                should_include = True
-                break
-        
-        if not should_include:
-            continue
-            
-        # Check exclude patterns
-        should_exclude = False
-        for pattern in exclude_patterns:
-            if pattern in name.lower() or pattern in module_name.lower():
-                should_exclude = True
-                break
-        
-        if not should_exclude:
-            target_modules.add(module_name)
-
-    target_modules_list = list(target_modules)
-
-    if not target_modules_list:
-        logger.warning("No modules found with standard patterns, falling back to all linear layers")
-        for name, module in model.named_modules():
-            if isinstance(module, torch.nn.Linear):
-                module_name = name.split(".")[-1]
-                
-                should_exclude = False
-                for pattern in exclude_patterns:
-                    if pattern in module_name.lower():
-                        should_exclude = True
-                        break
-                
-                if not should_exclude:
-                    target_modules_list.append(module_name)
-        
-        target_modules_list = list(set(target_modules_list))
-
-    if not target_modules_list:
-        logger.warning("No suitable linear layers found, using conservative defaults")
-        target_modules_list = ["q_proj", "v_proj"]
-
-    logger.info(f"Found {len(target_modules_list)} target modules: {target_modules_list}")
-    return target_modules_list
-
-
 def create_qlora_config(
     model_size_gb: float = None,
     task_complexity: str = "medium",
@@ -205,10 +115,12 @@ def create_qlora_config(
         r=r,
         lora_alpha=lora_alpha,
         target_modules=target_modules,
+        target_modules="all-linear",
         lora_dropout=lora_dropout,
         bias="none",
         task_type="CAUSAL_LM"
     )
+    
 
 
 def run_qlora_fine_tuning(
@@ -365,7 +277,7 @@ def run_qlora_fine_tuning(
         trainer = SFTTrainer(
             model=model,
             train_dataset=tokenized_dataset,
-            tokenizer=tokenizer,
+            processing_class=tokenizer,
             args=training_args,
             data_collator=default_data_collator,
             max_seq_length=2048,
