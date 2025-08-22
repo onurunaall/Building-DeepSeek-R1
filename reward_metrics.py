@@ -3,6 +3,7 @@ from typing import List, Any, Callable, Tuple
 from latex2sympy2_extended import NormalizationConfig
 from math_verify import LatexExtractionConfig, parse, verify
 
+
 def _verify_math_expression(response_text: str, true_value_text: str) -> float:
     """
     Parse and verify a math response against its ground truth.
@@ -233,12 +234,8 @@ def create_cosine_reward_func(
     """
     Factory returning a function to compute cosine rewards.
     """
-    def cosine_reward(
-        responses: List[Any],
-        solution: List[str],
-        **kwargs
-    ) -> List[float]:
-        texts = [item[0]["content"] for item in responses]
+    def cosine_reward(completions: List[Any], solution: List[str], **kwargs) -> List[float]:
+        texts = [item[0]["content"] for item in completions]
         if not (len(texts) == len(solution)):
             print("Warning: Mismatch in lengths for cosine rewards.")
             return []
@@ -269,14 +266,8 @@ def create_repetition_penalty_func(
     if penalty_value > 0:
         raise ValueError(f"Penalty must be non-positive, got {penalty_value}")
 
-    def rep_penalty(
-        responses: List[Any],
-        **kwargs
-    ) -> List[float]:
-        texts = [item[0]["content"] for item in responses]
-        return [
-            _calculate_single_repetition_penalty(text, ngram, penalty_value)
-            for text in texts
-        ]
+	def rep_penalty(completions: List[Any], **kwargs) -> List[float]:
+        texts = [item[0]["content"] for item in completions]
+        return [_calculate_single_repetition_penalty(text, ngram, penalty_value) for text in texts]
 
     return rep_penalty
