@@ -214,7 +214,7 @@ def run_ft_training(input_model_path: str = MODEL_REF,
         ft_trainer = SFTTrainer(
             model=ft_model,
             train_dataset=tokenized_ds,
-            tokenizer=ft_tokenizer,
+            processing_class=ft_tokenizer,
             args=ft_training_args
         )
     except Exception as e:
