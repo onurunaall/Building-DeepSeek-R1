@@ -172,55 +172,49 @@ def _calculate_single_repetition_penalty(text: str, ngram: int, penalty_value: f
     return repetition_ratio * penalty_value
 
 
-def evaluate_accuracy(outputs: List[Any], **kwargs) -> List[float]:
+def evaluate_accuracy(completions: List[Any], **kwargs) -> List[float]:
     """
     Score each response against its ground truth in kwargs['solution'].
     """
     try:
-        responses = [item[0]["content"] for item in outputs]
+        responses = [item[0]["content"] for item in completions]
     except Exception:
         print("Error: Unexpected format in evaluate_accuracy.")
-        return [0.0] * len(outputs)
+        return [0.0] * len(completions)
 
     ground_truths = kwargs.get("solution")
     if ground_truths is None:
         print("Warning: No 'solution' provided for accuracy.")
-        return [0.0] * len(outputs)
+        return [0.0] * len(completions)
     if len(responses) != len(ground_truths):
         print("Warning: Mismatch responses vs solutions.")
-        return [0.0] * len(outputs)
+        return [0.0] * len(completions)
 
-    return [
-        _verify_math_expression(resp, truth)
-        for resp, truth in zip(responses, ground_truths)
-    ]
+    return [_verify_math_expression(resp, truth) for resp, truth in zip(responses, ground_truths)]
 
 
-def evaluate_format(outputs: List[Any], **kwargs) -> List[float]:
+def evaluate_format(completions: List[Any], **kwargs) -> List[float]:
     """
     Check <think>…</think><answer>…</answer> format; 1.0 if correct, else 0.0.
     """
     try:
-        responses = [item[0]["content"] for item in outputs]
+        responses = [item[0]["content"] for item in completions]
     except Exception:
         print("Error: Unexpected format in evaluate_format.")
-        return [0.0] * len(outputs)
+        return [0.0] * len(completions)
 
-    return [
-        1.0 if _check_format_tags(text) else 0.0
-        for text in responses
-    ]
+    return [1.0 if _check_format_tags(text) else 0.0 for text in responses]
 
 
-def evaluate_reasoning_steps(outputs: List[Any], **kwargs) -> List[float]:
+def evaluate_reasoning_steps(completions: List[Any], **kwargs) -> List[float]:
     """
     Reward based on count of reasoning indicators (normalized by 3, capped at 1.0).
     """
     try:
-        responses = [item[0]["content"] for item in outputs]
+        responses = [item[0]["content"] for item in completions]
     except Exception:
         print("Error: Unexpected format in evaluate_reasoning_steps.")
-        return [0.0] * len(outputs)
+        return [0.0] * len(completions)
 
     scores = []
     for text in responses:
